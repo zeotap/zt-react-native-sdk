@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Deliberately empty beyond the package declaration.
+
+  The bridge needs no permissions of its own: INTERNET comes from the underlying
+  com.zeotap.sdk:android-sdk manifest (merged in), and the SDK collects no
+  hardware identifier by default, so there is nothing here to justify. A library
+  manifest that requested permissions would silently add them to every consuming
+  app, which is exactly what the legacy SDK did with READ_PHONE_STATE.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

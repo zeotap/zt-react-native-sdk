@@ -1,0 +1,128 @@
+// Android build for @zeotap/react-native-sdk (increment 245).
+//
+// A React Native library does NOT pin its own AGP/Kotlin/compileSdk: the
+// consuming app's root build supplies them, and a library that pinned its own
+// would force every app onto that toolchain. Hence the `safeExtGet` reads below,
+// each with the floor this package actually needs as its fallback.
+import groovy.json.JsonSlurper
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.7.3"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21"
+  }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+
+// Under the new architecture the TurboModule base class (NativeZeotapSpec) is
+// GENERATED from src/NativeZeotap.ts by RN codegen, and codegen only runs for a
+// library that applies the React Native Gradle plugin. Without it the newarch
+// ZeotapModule extended a class that never existed: the bridge's first real
+// compile failed with "Unresolved reference: NativeZeotapSpec".
+if (project.hasProperty("newArchEnabled") && project.newArchEnabled == "true") {
+  apply plugin: "com.facebook.react"
+}
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+// The new architecture is a property of the APP, not of this library: the app's
+// gradle.properties carries `newArchEnabled`. It decides which of the two
+// `ZeotapModule` source sets is compiled and what ZeotapPackage reports to RN.
+def isNewArchitectureEnabled() {
+  return project.hasProperty("newArchEnabled") && project.newArchEnabled == "true"
+}
+
+// The native SDK version is read from ONE file, shared with the podspec, so a
+// bump cannot be applied to one platform only. Dev and CI builds substitute the
+// local `sdk/android` project for this coordinate instead (Gradle includeBuild +
+// dependencySubstitution, wired by scripts/init-example.sh), which is what makes
+// a monorepo change testable before it is ever published.
+def nativeVersions = new JsonSlurper().parse(file("../NATIVE_VERSIONS.json"))
+def zeotapAndroidSdkVersion = nativeVersions.android
+
+android {
+  namespace "com.zeotap.reactnative"
+  compileSdk safeExtGet("compileSdkVersion", 35)
+
+  defaultConfig {
+    minSdk safeExtGet("minSdkVersion", 23) // matches com.zeotap.sdk:android-sdk
+    targetSdk safeExtGet("targetSdkVersion", 35)
+    buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", isNewArchitectureEnabled().toString()
+  }
+
+  buildFeatures {
+    buildConfig true
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  sourceSets {
+    main {
+      // Exactly one architecture shim is ever compiled. Codegen writes the
+      // generated NativeZeotapSpec into the app's build directory and puts it on
+      // this module's classpath, which is why the newarch source set can extend
+      // a class that exists nowhere in this repository.
+      if (isNewArchitectureEnabled()) {
+        java.srcDirs += ["src/newarch/java"]
+      } else {
+        java.srcDirs += ["src/oldarch/java"]
+      }
+    }
+    test {
+      // The unit tests drive ZeotapModuleImpl, which is architecture-agnostic, so
+      // they compile against `main` alone and run under either setting.
+      java.srcDirs += ["src/test/java"]
+    }
+  }
+
+  testOptions {
+    unitTests {
+      includeAndroidResources = true
+      returnDefaultValues = true
+    }
+  }
+}
+
+kotlin {
+  jvmToolchain(17)
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  // Supplied by the app; `+` is the RN convention for a library, since the app
+  // decides its own React Native version and this bridge supports a range.
+  implementation "com.facebook.react:react-android"
+  implementation "org.jetbrains.kotlin:kotlin-stdlib:${safeExtGet('kotlinVersion', '2.0.21')}"
+  api "com.zeotap.sdk:android-sdk:${zeotapAndroidSdkVersion}"
+
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.robolectric:robolectric:4.14.1"
+  // ApplicationProvider, for the ReactApplicationContext the impl needs.
+  testImplementation "androidx.test:core:1.6.1"
+  // JavaOnlyMap / Arguments live in react-android, already on the classpath.
+}
+
+if (isNewArchitectureEnabled()) {
+  // Must match package.json "codegenConfig": name RNZeotapSpec, javaPackageName
+  // com.zeotap.reactnative — that is the package NativeZeotapSpec is generated into.
+  react {
+    jsRootDir = file("../src/")
+    libraryName = "RNZeotapSpec"
+    codegenJavaPackageName = "com.zeotap.reactnative"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "_doc": [
+    "The native SDK versions this bridge is built and published against — the ONE place",
+    "they are written, read by android/build.gradle (JsonSlurper) and by",
+    "ZeotapReactNative.podspec so a bump cannot be applied to one platform only.",
+    "",
+    "src/__tests__/native-versions.test.ts asserts these equal sdk/android/gradle.properties",
+    "VERSION_NAME and sdk/ios/VERSION, so the monorepo cannot drift from the bridge; the",
+    "release job additionally checks the pinned artifacts are actually resolvable before",
+    "publishing (a version that exists here but not on Maven Central / CocoaPods trunk",
+    "installs as a broken package for every consumer).",
+    "",
+    "Dev and CI builds substitute the LOCAL sources instead of these coordinates (Gradle",
+    "includeBuild + dependencySubstitution, and `pod 'ZeotapSDK', :path =>` for iOS), so a",
+    "monorepo change is exercised before it is ever published. These numbers are what a",
+    "customer installing from npm resolves."
+  ],
+  "android": "0.1.0",
+  "ios": "0.1.0"
+}

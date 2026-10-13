@@ -1,0 +1,90 @@
+# Publishes @zeotap/react-native-sdk to npm when a release tag (v<version>)
+# arrives in this repository.
+#
+# Why it publishes from HERE and not from the SDK monorepo the tag comes from:
+# npm generates provenance only for PUBLIC source repositories, and requires
+# package.json's repository.url to match the repository that published. The
+# monorepo is private; this repository is what package.json names. So the
+# monorepo's release train gates the bridge, exports this tree and pushes the
+# tag, and this workflow does the one thing only this repository can do.
+#
+# Trusted publishing, no NPM_TOKEN: on npmjs.com, @zeotap/react-native-sdk →
+# Settings → Trusted publisher → GitHub Actions, repository
+# zeotap/zeotap-pulse-rn, workflow publish.yml, no environment.
+#
+# workflow_dispatch is a DRY RUN by default: every check, then `npm pack`.
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run every check, publish nothing (leave ticked unless you mean it)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # the OIDC token npm exchanges for a publish credential + provenance
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # A tag push publishes; a hand-run takes the input, which defaults to true.
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Node 20 ships npm 10, which cannot do OIDC trusted publishing (needs
+      # >= 11.5.1) and fails asking for credentials that do not exist.
+      - name: Upgrade npm
+        run: npm install -g npm@latest && npm --version
+
+      - name: Tag matches package.json version
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          echo "package.json=$version ref=$GITHUB_REF_NAME ($GITHUB_REF_TYPE) DRY_RUN=$DRY_RUN"
+          if [ "$DRY_RUN" != "true" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Refusing to publish $version from ref $GITHUB_REF_NAME; a publish runs only from tag v$version."
+            exit 1
+          fi
+
+      - run: npm ci --ignore-scripts
+      - run: npm run check-version
+      - run: npx tsc --noEmit
+      - run: npx jest
+      - run: npx bob build
+      - run: scripts/pack-smoke.sh
+
+      # The natives this bridge pins must already be on Maven Central and
+      # CocoaPods: a bridge published first installs broken for everyone, and
+      # npm versions cannot be replaced.
+      - name: Pinned native SDKs are published
+        run: scripts/check-natives-published.sh
+
+      - name: Dry run — what WOULD be published
+        if: env.DRY_RUN == 'true'
+        run: |
+          echo "WOULD run: npm publish --provenance --access public"
+          npm pack --dry-run
+
+      # --access public: a scoped package defaults to restricted on first
+      # publish, and a restricted package is invisible to customers.
+      - name: npm publish
+        if: env.DRY_RUN != 'true'
+        run: npm publish --provenance --access public
