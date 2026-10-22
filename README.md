@@ -1,6 +1,6 @@
 # `@zeotap/react-native-sdk`
 
-The SignalSmith React Native SDK — a **thin bridge** over the native
+The Zeotap React Native SDK — a **thin bridge** over the native
 [Android](https://github.com/zeotap/zeotap-pulse-android) and [iOS](https://github.com/zeotap/zeotap-pulse-ios) SDKs.
 
 All the business logic lives in those: the payload shape, consent gating, the IAB

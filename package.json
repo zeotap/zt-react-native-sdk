@@ -1,7 +1,7 @@
 {
   "name": "@zeotap/react-native-sdk",
   "version": "0.1.0",
-  "description": "SignalSmith React Native SDK — a thin bridge over the native Android and iOS SDKs",
+  "description": "Zeotap React Native SDK: collects events in React Native apps and streams them to Zeotap, through the native Android and iOS SDKs",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
   "types": "lib/typescript/index.d.ts",
@@ -33,7 +33,7 @@
     "react-native",
     "analytics",
     "cdp",
-    "signalsmith",
+    "events",
     "zeotap"
   ],
   "license": "MIT",
